@@ -1,15 +1,18 @@
 package main
 
-import (
-	"os"
-)
+import "fmt"
 
 func main() {
 	// initialize db
-	dal, _ := NewDal("db.db", os.Getpagesize())
+	dal, err := NewDal("db.db")
+
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+	}
 
 	// create a new page
 	p := dal.AllocateEmptyPage()
+	// fmt.Println(dal)
 	p.num = dal.getNextPage()
 	copy(p.data[:], "data")
 
