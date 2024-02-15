@@ -1,6 +1,9 @@
 package main
 
-import "encoding/binary"
+import (
+	"bytes"
+	"encoding/binary"
+)
 
 type Item struct {
 	key   []byte
@@ -118,4 +121,58 @@ func (n *Node) deserialize(buf []byte) {
 		pageNum := pgnum(binary.LittleEndian.Uint64(buf[leftPos:]))
 		n.childNodes = append(n.childNodes, pageNum)
 	}
+}
+
+func (n *Node) writeNode(node *Node) (*Node, error) {
+	return n.Dal.writeNode(node)
+}
+
+func (n *Node) writeNodes(nodes ...*Node) {
+	for _, node := range nodes {
+		n.writeNode(node)
+	}
+}
+
+func (n *Node) getNode(pageNum pgnum) (*Node, error) {
+	return n.Dal.getNode(pageNum)
+}
+
+func (n *Node) findKeyInNode(key []byte) (bool, int) {
+	for i, item := range n.items {
+		res := bytes.Compare(item.key, key)
+		if res == 0 {
+			return true, i
+		}
+
+		if res == 1 {
+			return false, i
+		}
+	}
+	return false, len(n.items)
+}
+
+func (n *Node) findKey(key []byte) (int, *Node, error) {
+	index, node, err := findKeyHelper(n, key)
+	if err != nil {
+		return -1, nil, err
+	}
+	return index, node, nil
+}
+
+func findKeyHelper(n *Node, key []byte) (int, *Node, error) {
+	wasFound, index := n.findKeyInNode(key)
+
+	if wasFound {
+		return index, n, nil
+	}
+
+	if n.isLeaf() {
+		return -1, nil, nil
+	}
+
+	nextChild, err := n.getNode(n.childNodes[index])
+	if err != nil {
+		return -1, nil, err
+	}
+	return findKeyHelper(nextChild, key)
 }

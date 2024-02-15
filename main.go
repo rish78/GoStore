@@ -4,18 +4,14 @@ import "fmt"
 
 func main() {
 	// initialize db
-	dal, err := NewDal("db.db")
+	dal, _ := NewDal("/mainTest")
 
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-	}
+	node, _ := dal.getNode(dal.root)
+	node.Dal = dal
+	index, containingNode, _ := node.findKey([]byte("Key1"))
+	res := containingNode.items[index]
 
-	// create a new page
-	p := dal.AllocateEmptyPage()
-	// fmt.Println(dal)
-	p.num = dal.getNextPage()
-	copy(p.data[:], "data")
-
-	// commit it
-	_ = dal.WritePage(p)
+	fmt.Printf("key is: %s, value is: %s", res.key, res.value)
+	// Close the db
+	_ = dal.Close()
 }
