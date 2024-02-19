@@ -14,17 +14,33 @@ type Page struct {
 }
 
 type Dal struct {
-	file     *os.File
-	pageSize int
+	file           *os.File
+	pageSize       int
+	minFillPercent float32
+	maxFillPercent float32
 
 	*freelist
 	*meta
 }
 
-func NewDal(path string) (*Dal, error) {
+type Options struct {
+	pageSize int
+
+	MinFillPercent float32
+	MaxFillPercent float32
+}
+
+var DefaultOptions = &Options{
+	MinFillPercent: 0.5,
+	MaxFillPercent: 0.95,
+}
+
+func NewDal(path string, options *Options) (*Dal, error) {
 	dal := &Dal{
-		meta:     newEmptyMeta(),
-		pageSize: os.Getpagesize(),
+		meta:           newEmptyMeta(),
+		pageSize:       options.pageSize,
+		minFillPercent: options.MinFillPercent,
+		maxFillPercent: options.MaxFillPercent,
 	}
 
 	// exist
@@ -150,6 +166,18 @@ func (d *Dal) writeFreeList() (*Page, error) {
 	return p, nil
 }
 
+func (d *Dal) newNode(items []*Item, childNodes []pgnum) *Node {
+	node := NewEmptyNode()
+	node.items = make([]Item, len(items))
+	for i, item := range items {
+		node.items[i] = *item
+	}
+	node.childNodes = childNodes
+	node.pageNum = d.getNextPage()
+	node.Dal = d
+	return node
+}
+
 func (d *Dal) getNode(pageNum pgnum) (*Node, error) {
 	p, err := d.ReadPage(pageNum)
 	if err != nil {
@@ -182,4 +210,33 @@ func (d *Dal) writeNode(n *Node) (*Node, error) {
 
 func (d *Dal) deleteNode(pageNum pgnum) {
 	d.releasePage(pageNum)
+}
+
+func (d *Dal) maxThreshold() float32 {
+	return d.maxFillPercent * float32(d.pageSize)
+}
+
+func (d *Dal) isOverPopulated(n *Node) bool {
+	return float32(n.nodeSize()) > d.maxThreshold()
+}
+
+func (d *Dal) minThreshold() float32 {
+	return d.minFillPercent * float32(d.pageSize)
+}
+
+func (d *Dal) isUnderPopulated(n *Node) bool {
+	return float32(n.nodeSize()) < d.minThreshold()
+}
+
+func (d *Dal) getSplitIndex(n *Node) int {
+	size := 0
+	size += nodeHeaderSize
+
+	for i := range n.items {
+		size += n.elementSize(i)
+		if float32(size) > d.minThreshold() && i < len(n.items)-1 {
+			return i + 1
+		}
+	}
+	return -1
 }

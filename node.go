@@ -176,3 +176,75 @@ func findKeyHelper(n *Node, key []byte) (int, *Node, error) {
 	}
 	return findKeyHelper(nextChild, key)
 }
+
+func (n *Node) elementSize(i int) int {
+	size := 0
+	size += len(n.items[i].key)
+	size += len(n.items[i].value)
+	size += pageNumSize
+	return size
+}
+
+func (n *Node) nodeSize() int {
+	size := 0
+	size += nodeHeaderSize
+
+	for i := range n.items {
+		size += n.elementSize(i)
+	}
+
+	size += pageNumSize
+	return size
+}
+
+func (n *Node) addItem(item *Item, insertionIndex int) int {
+	if len(n.items) == insertionIndex {
+		n.items = append(n.items, *item)
+		return insertionIndex
+	}
+
+	n.items = append(n.items[:insertionIndex+1], n.items[insertionIndex:]...)
+	n.items[insertionIndex] = *item
+	return insertionIndex
+}
+
+func (n *Node) isOverPopulated() bool {
+	return n.Dal.isOverPopulated(n)
+}
+
+func (n *Node) isUnderPopulated() bool {
+	return n.Dal.isUnderPopulated(n)
+}
+
+func (n *Node) split(nodeToSplit *Node, nodeToSplitIndex int) {
+	splitIndex := nodeToSplit.Dal.getSplitIndex(nodeToSplit)
+
+	middleItem := nodeToSplit.items[splitIndex]
+	var newNode *Node
+
+	if nodeToSplit.isLeaf() {
+		newNode, _ = n.writeNode(n.Dal.newNode(convertToPointerSlice(nodeToSplit.items[splitIndex+1:]), []pgnum{}))
+		nodeToSplit.items = nodeToSplit.items[:splitIndex]
+	} else {
+		newNode, _ = n.writeNode(n.Dal.newNode(convertToPointerSlice(nodeToSplit.items[splitIndex+1:]), nodeToSplit.childNodes[splitIndex+1:]))
+		nodeToSplit.items = nodeToSplit.items[:splitIndex]
+		nodeToSplit.childNodes = nodeToSplit.childNodes[:splitIndex+1]
+	}
+
+	n.addItem(&middleItem, nodeToSplitIndex)
+	if len(n.childNodes) == nodeToSplitIndex+1 {
+		n.childNodes = append(n.childNodes, newNode.pageNum)
+	} else {
+		n.childNodes = append(n.childNodes[:nodeToSplitIndex+1], n.childNodes[nodeToSplitIndex:]...)
+		n.childNodes[nodeToSplitIndex+1] = newNode.pageNum
+	}
+	n.writeNodes(n, nodeToSplit)
+}
+
+func convertToPointerSlice(items []Item) []*Item {
+	pointerSlice := make([]*Item, len(items))
+	for i, item := range items {
+		pointerSlice[i] = &item
+	}
+	return pointerSlice
+}

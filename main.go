@@ -8,7 +8,10 @@ func main() {
 
 	node, _ := dal.getNode(dal.root)
 	node.Dal = dal
-	index, containingNode, _ := node.findKey([]byte("Key1"))
+	index, containingNode, err := node.findKey([]byte("Key1"))
+	if err != nil {
+		fmt.Println("Error: ", err)
+	}
 	res := containingNode.items[index]
 
 	fmt.Printf("key is: %s, value is: %s", res.key, res.value)

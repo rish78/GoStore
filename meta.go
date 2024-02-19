@@ -4,7 +4,6 @@ import "encoding/binary"
 
 const (
 	metaPageNum = 0
-	pageNumSize = 8
 )
 
 type meta struct {
